@@ -13,6 +13,7 @@ public class Synth2 extends JComponent implements KeyListener {
 	public BufferedImage mask;
 	public double maxErrorThreshold = 0.3;
 	public double errorThreshold = 0.1;
+	public boolean wrap = false;
 	public Synth2(String sampleUrl, int finalWidth, int finalHeight, int nSize, int seedSize) {
 		try {
 			sample = ImageIO.read(new File(sampleUrl));
@@ -50,6 +51,7 @@ public class Synth2 extends JComponent implements KeyListener {
 		System.out.println("nSize " + nSize);
 		PixelCon[] next = getNextPixels();
 		while (next.length > 0) {
+			System.out.println(".");
 			int highestNcount = next[0].n;
 			for (int i = 0; i < next.length; ++i) {
 				if (next[i].n < highestNcount) {
@@ -67,6 +69,7 @@ public class Synth2 extends JComponent implements KeyListener {
 			}
 			next = getNextPixels();
 		}
+		System.out.println("Done");
 	}
 
 	public PixelCon getBestPixel(PixelCon[] template) {
@@ -109,13 +112,26 @@ public class Synth2 extends JComponent implements KeyListener {
 			for (int j = 0; j < nSize; j++) {
 				int x = startX - offset + i;
 				int y = startY - offset + j;
-				if (!(x < 0 || x >= mask.getWidth() || y < 0 || y >= mask.getHeight() || (i == 1 && j == 0))) {
-					int color = mask.getRGB(x, y);
-					if (getRed(color) > 0) { // not black
-						int resultsColor = results.getRGB(x,y);
-						// System.out.println("Location" + x + ", " + y);
-						// System.out.println("Color" + resultsColor);
-						template.add(new PixelCon(x - startX, y - startY,0,resultsColor));
+				if (!wrap) {
+					if (!(x < 0 || x >= mask.getWidth() || y < 0 || y >= mask.getHeight() || (i == 1 && j == 0))) {
+						int color = mask.getRGB(x, y);
+						if (getRed(color) > 0) { // not black
+							// System.out.println("Location" + x + ", " + y);
+							int resultsColor = results.getRGB(x,y);
+							// System.out.println("Color" + resultsColor);
+							template.add(new PixelCon(x - startX, y - startY,0,resultsColor));
+						}
+					}
+				}
+				else {
+					if (!(i == 1 && j == 0)) { // edge looping
+						int wrapX = (x < 0) ? results.getWidth() + x: x % results.getWidth();
+						int wrapY = (y < 0) ? results.getHeight() + y: y % results.getHeight();
+						int color = mask.getRGB(wrapX, wrapY);
+						if (getRed(color) > 0) { // not black
+							int resultsColor = results.getRGB(wrapX, wrapY);
+							template.add(new PixelCon(x - startX, y - startY,0,resultsColor));
+						}
 					}
 				}
 			}
