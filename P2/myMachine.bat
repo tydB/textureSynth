@@ -1,0 +1,1 @@
+nvcc -ccbin "X:\VS\VC\bin" -o Synth.exe synth.cu --machine 32 -IC:\cuda\include -I..\..\common\inc -L..\..\common\lib -LC:\cuda\lib64 -lcudart
