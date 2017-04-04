@@ -1,0 +1,5 @@
+http://graphics.cs.cmu.edu/people/efros/research/EfrosLeung.html
+http://graphics.cs.cmu.edu/people/efros/research/NPS/alg.html
+https://github.com/iskandr/texture_synthesis/blob/master/synth.m
+https://www.cs.cmu.edu/afs/cs/academic/class/15462-s12/www/lec_slides/textureSynthesis.pdf
+http://groups.inf.ed.ac.uk/vision/GRASSIN/SkinSpotTool/skinSpotTool/GaussianSmooth.java

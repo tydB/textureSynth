@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Texture Synthesis Prototype</title>
+		<style type="text/css">
+			body {
+				background-color: #656565;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id = "sample">
+			
+		</canvas>
+		<br />
+		<canvas id = "synth">
+			
+		</canvas>
+		<script type="text/javascript">
+			// synthetic
+			var canSynth = document.getElementById('synth');
+			var ctxSynth = canSynth.getContext("2d");
+			canSynth.width = 32;
+			canSynth.height = 32;
+			// sample
+			var canSample = document.getElementById('sample');
+			var ctxSample = canSample.getContext("2d");
+			var sample = new Image();
+			sample.onload = function() {
+				canSample.width = this.width;
+				canSample.height = this.height;
+				drawSample();
+			}
+			sample.src = "../sampleImages/dots.png";
+
+			var sampleData;
+			var mask;
+			var synthData;
+			var NSIZE = 5;
+			var SIGMA = NSIZE / 6.4;
+			// var SIGMA = 0.125;
+			var ERRORTHRESH = 0.1;
+			function drawSample() {
+				console.log("Loaded Sample Successfully");
+				ctxSample.drawImage(sample,0,0);
+				init();
+			}
+			function init() {
+				console.log("Initialize");
+				sampleData = ctxSample.getImageData(0, 0, sample.width, sample.height);
+				ctxSynth.fillStyle = "rgba(0,0,0,0)";
+				ctxSynth.fillRect(0,0,canSynth.width, canSynth.height);
+				synthData = ctxSynth.getImageData(0,0,canSynth.width, canSynth.height);
+				mask = [];
+				for (var i = 0; i < synthData.width; i++) {
+					mask[i] = [];
+					for (var j = 0; j < synthData.height; j++) {
+						mask[i][j] = false;
+					}
+				}
+				seed();
+				redraw();
+				createTexture(NSIZE);
+				redraw();
+			}
+			function seed() {
+				// get random pixel from sample
+				var x = parseInt(Math.random() * (sampleData.width - 2));
+				var y = parseInt(Math.random() * (sampleData.width - 2));
+				console.log("Random Seed Sample Location", x,y);
+				for (var sampleI = 0; sampleI < 3; sampleI++) {
+					for (var sampleJ = 0; sampleJ < 3; sampleJ++) {
+						setRGBA(getRGBA(sampleData, x + sampleI,y + sampleJ),
+							parseInt(synthData.width / 2) + sampleI - 1,
+							parseInt(synthData.height / 2) + sampleJ - 1);
+					}
+				}
+			}
+			function createTexture(nsize) {
+				var emptyPixels = findNeighbors();
+				while (emptyPixels.length > 0) {
+					do {
+						var pixelLocation = emptyPixels.pop();
+						var template = getValidPixels(pixelLocation, nsize, false);
+						// ------------------------------------------------------------------------Code that should not have to exist \/
+						if (template.length == 0) {
+							console.log("No template found!!!!!");
+							console.log("Selected Pixel Location", pixelLocation);
+							console.log("Template", template);
+							var template = getValidPixels(pixelLocation, nsize, true);
+							console.log("Template", template);
+							return;
+						}
+						// ------------------------------------------------------------------------Code that should not have to exist ^
+						var matches = findMatches(template, nsize);
+						// console.log(matches.length);
+						var match = matches[parseInt(Math.random() * matches.length)];
+						// console.log(match);
+						setRGBA(getRGBA(sampleData, match.x, match.y), pixelLocation.x, pixelLocation.y);
+						// break;
+					} while (emptyPixels.length > 0);
+					emptyPixels = findNeighbors();
+				}
+			}
+			function findMatches(template, nsize) {
+				var matches = [];
+				var gaussianValues = getGaussian(template);
+				var totWeight = 0;
+				var minSSD = -1;
+				for (var i = 0; i < template.length; i++) {
+					totWeight += gaussianValues[i];
+				}
+				var minSSD = -1;
+				var pixelError = [];
+				for (var i = 0; i < sampleData.width; i++) {
+					pixelError[i] = [];
+					for (var j = 0; j < sampleData.height; j++) {
+						pixelError[i][j] = 0;
+						for (var t = 0; t < template.length; t++) {
+							var sampleI = i + template[t].x;
+							var sampleJ = j + template[t].y;
+							if (sampleI >= 0 && sampleI < sampleData.width && sampleJ >= 0 && sampleJ < sampleData.height) {
+								// console.log(t, sampleI, sampleJ);
+								var dist = colorDistance(template[t].color, getRGBA(sampleData, sampleI, sampleJ));
+								// console.log("dist", dist, gaussianValues[t]);
+								pixelError[i][j] += dist * gaussianValues[t];
+							}
+							else {
+								pixelError += 255+255+255;
+							}
+							if (pixelError[i][j] < minSSD || minSSD == -1) {
+								minSSD = pixelError[i][j];
+							}
+						}
+					}
+				}
+				for (var i = 0; i < pixelError.length; i++) {
+					for (var j = 0; j < pixelError[i].length; j++) {
+						// console.log(pixelError[i][j]);
+						if (pixelError[i][j] == minSSD) {
+							// console.log("min error", i, j);
+							matches.push({x: i, y: j});
+						}
+					}
+				}
+				return matches;
+			}
+			function colorDistance(c0, c1) {
+				// convert from 0-255 to 0-1
+				// c0.red /= 255;
+				// c0.blue /= 255;
+				// c0.green /= 255;
+				// c0.alpha /= 255;
+				// c1.red /= 255;
+				// c1.blue /= 255;
+				// c1.green /= 255;
+				// c1.alpha /= 255;
+				return Math.sqrt(Math.pow(c0.red - c1.red, 2) + Math.pow(c0.green - c1.green, 2) + Math.pow(c0.blue - c1.blue, 2) + Math.pow(c0.alpha - c1.alpha, 2));
+			}
+			function getGaussian(distances) {
+				var gausDist = [];
+				for (var i = 0; i < distances.length; i++) {
+					var x = Math.sqrt(distances[i].x * distances[i].x + distances[i].y * distances[i].y);
+					var exp = -(Math.pow(x, 2))/(2 * Math.pow(SIGMA, 2));
+					var frac = 1 / (SIGMA * Math.sqrt(2 * Math.PI));
+					var dist = frac * Math.pow(Math.E, exp);
+					gausDist.push(dist);
+				}
+				return gausDist;
+			}
+			// returns a list of locations with valid pixels within the neighborhood
+			// list is in relative locations
+			function getValidPixels(location, size, output) {
+				var offset = parseInt(size / 2);
+				var pixelInfo = [];
+				var start = -parseInt(size / 2);
+				var end = parseInt(size / 2);
+				// for the neighborhood
+				for (var sampleJ = start; sampleJ <= end; ++sampleJ) {
+					for (var sampleI = start; sampleI <= end; ++sampleI) {
+						// check bounds
+						if (location.x + sampleI >= 0 && location.x + sampleI < mask.length 
+								&& location.y + sampleJ >= 0 && location.y + sampleJ < mask[0].length
+								&& (sampleI != 0 || sampleJ !=0)) {
+							// check if set
+							if (output) console.log(sampleI, sampleJ);
+							if (mask[location.x + sampleI][location.y + sampleJ]) {
+								var info = {color: getRGBA(synthData, location.x + sampleI, location.y + sampleJ), x: sampleI, y: sampleJ};
+								pixelInfo.push(info);
+							}
+						}
+					}
+				}
+				return pixelInfo;
+			}
+			function findNeighbors() {
+				var xyList = [];
+				for (var i = 0; i < mask.length; i++) {
+					for (var j = 0; j < mask[i].length; j++) {
+						if (!mask[i][j]) {
+							var found = false;
+							// check surrounding pixels for false values
+							for (var sampleI = -1; sampleI < 2; sampleI++) {
+								for (var sampleJ = -1; sampleJ < 2; sampleJ++) {
+									// inbounds
+									if (i + sampleI >= 0 && i + sampleI < mask.length 
+											&& j + sampleJ >= 0 && j + sampleJ < mask[i].length) {
+										if (mask[i + sampleI][j + sampleJ]) {
+											found = true;
+										}
+									}
+								}
+							}
+							if (found) {
+								xyList.push({x: i, y: j});
+							}
+						}
+					}
+				}
+				return xyList;
+			}
+			function setRGBA(color, x, y) {
+				synthData.data[((synthData.width * y) + x) * 4] = color.red;
+				synthData.data[((synthData.width * y) + x) * 4 + 1] = color.green;
+				synthData.data[((synthData.width * y) + x) * 4 + 2] = color.blue;
+				synthData.data[((synthData.width * y) + x) * 4 + 3] = color.alpha;
+				mask[x][y] = true;
+			}
+			function getRGBA(imgData, x,y) {
+				var red = imgData.data[((imgData.width * y) + x) * 4];
+				var green = imgData.data[((imgData.width * y) + x) * 4 + 1];
+				var blue = imgData.data[((imgData.width * y) + x) * 4 + 2];
+				var alpha = imgData.data[((imgData.width * y) + x) * 4 + 3];
+				return {red: red, green: green, blue: blue, alpha: alpha};
+			}
+			function redraw() {
+				ctxSynth.putImageData(synthData,0,0);
+			}
+		</script>
+	</body>
+</html>
